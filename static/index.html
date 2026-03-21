@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tiempo Valencia</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --sky: #0a1628;
+    --sky-mid: #0d2040;
+    --sky-light: #1a3a6e;
+    --accent: #4fc3f7;
+    --accent-warm: #ffb74d;
+    --text: #e8f4fd;
+    --text-muted: #7bafd4;
+    --glass: rgba(255,255,255,0.05);
+    --glass-border: rgba(79,195,247,0.2);
+    --radius: 20px;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--sky);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(26,58,110,0.6) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(79,195,247,0.08) 0%, transparent 50%);
+  }
+
+  /* Stars background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.4) 0%, transparent 100%),
+      radial-gradient(1px 1px at 25% 40%, rgba(255,255,255,0.3) 0%, transparent 100%),
+      radial-gradient(1px 1px at 50% 10%, rgba(255,255,255,0.5) 0%, transparent 100%),
+      radial-gradient(1px 1px at 70% 30%, rgba(255,255,255,0.2) 0%, transparent 100%),
+      radial-gradient(1px 1px at 85% 60%, rgba(255,255,255,0.4) 0%, transparent 100%),
+      radial-gradient(1px 1px at 35% 70%, rgba(255,255,255,0.2) 0%, transparent 100%),
+      radial-gradient(1px 1px at 90% 85%, rgba(255,255,255,0.3) 0%, transparent 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2.5rem;
+    animation: fadeDown 0.6s ease both;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+  }
+
+  .logo span { color: var(--text-muted); font-weight: 400; }
+
+  .badge-aemet {
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border: 1px solid var(--glass-border);
+    padding: 4px 12px;
+    border-radius: 100px;
+  }
+
+  /* Glass card */
+  .card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(12px);
+    padding: 1.75rem;
+  }
+
+  /* Main grid */
+  .grid-main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+
+  @media (max-width: 700px) {
+    .grid-main { grid-template-columns: 1fr; }
+  }
+
+  /* Current weather card */
+  .card-current {
+    animation: fadeUp 0.6s ease 0.1s both;
+  }
+
+  .card-label {
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .card-label::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+  }
+
+  .temp-big {
+    font-family: 'Syne', sans-serif;
+    font-size: 5rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: var(--text);
+    margin-bottom: 0.25rem;
+  }
+
+  .temp-big span {
+    font-size: 2rem;
+    color: var(--accent);
+    vertical-align: super;
+  }
+
+  .weather-desc {
+    font-size: 1.1rem;
+    color: var(--accent);
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+  }
+
+  .weather-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .meta-item {
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px;
+    padding: 0.75rem;
+  }
+
+  .meta-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+  }
+
+  .meta-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* Forecast card */
+  .card-forecast {
+    animation: fadeUp 0.6s ease 0.2s both;
+  }
+
+  .forecast-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .forecast-day {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px;
+    border: 1px solid transparent;
+    transition: border-color 0.2s;
+  }
+
+  .forecast-day:hover { border-color: var(--glass-border); }
+
+  .forecast-date {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text);
+    min-width: 80px;
+  }
+
+  .forecast-desc {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    flex: 1;
+    padding: 0 0.75rem;
+    text-align: center;
+  }
+
+  .forecast-temps {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .temp-max { color: var(--accent-warm); }
+  .temp-min { color: var(--text-muted); font-weight: 400; }
+
+  /* Chat card */
+  .card-chat {
+    animation: fadeUp 0.6s ease 0.3s both;
+    margin-bottom: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .messages {
+    min-height: 180px;
+    max-height: 300px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--glass-border) transparent;
+  }
+
+  .msg {
+    max-width: 85%;
+    padding: 0.75rem 1rem;
+    border-radius: 16px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    animation: fadeUp 0.3s ease both;
+  }
+
+  .msg-user {
+    background: var(--accent);
+    color: var(--sky);
+    align-self: flex-end;
+    font-weight: 500;
+    border-bottom-right-radius: 4px;
+  }
+
+  .msg-agent {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid var(--glass-border);
+    color: var(--text);
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+  }
+
+  .msg-thinking {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.82rem;
+    align-self: flex-start;
+    padding: 0.5rem 0;
+  }
+
+  .chat-input-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  input[type="text"] {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--glass-border);
+    border-radius: 100px;
+    padding: 0.75rem 1.25rem;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  input[type="text"]::placeholder { color: var(--text-muted); }
+  input[type="text"]:focus {
+    border-color: var(--accent);
+    background: rgba(79,195,247,0.06);
+  }
+
+  .btn-send {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s, background 0.2s;
+    flex-shrink: 0;
+  }
+
+  .btn-send:hover { background: #81d4fa; transform: scale(1.05); }
+  .btn-send:active { transform: scale(0.95); }
+  .btn-send:disabled { background: var(--sky-light); cursor: not-allowed; transform: none; }
+
+  .btn-send svg { width: 18px; height: 18px; fill: var(--sky); }
+
+  /* Suggestions */
+  .suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    animation: fadeUp 0.6s ease 0.4s both;
+  }
+
+  .chip {
+    font-size: 0.78rem;
+    padding: 6px 14px;
+    border-radius: 100px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(79,195,247,0.06);
+  }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    animation: fadeUp 0.6s ease 0.5s both;
+    letter-spacing: 0.04em;
+  }
+
+  /* Loading skeleton */
+  .skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 8px;
+    height: 1rem;
+  }
+
+  /* Animations */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .dot-pulse {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    padding: 0.5rem 0;
+  }
+
+  .dot-pulse span {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.2s ease infinite;
+  }
+
+  .dot-pulse span:nth-child(2) { animation-delay: 0.2s; }
+  .dot-pulse span:nth-child(3) { animation-delay: 0.4s; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">Tiempo <span>Valencia</span></div>
+    <div class="badge-aemet">Datos AEMET oficiales</div>
+  </header>
+
+  <div class="grid-main">
+    <!-- Tiempo actual -->
+    <div class="card card-current">
+      <div class="card-label">Ahora mismo</div>
+      <div id="temp-display" class="temp-big">--<span>°C</span></div>
+      <div id="desc-display" class="weather-desc">Cargando...</div>
+      <div class="weather-meta">
+        <div class="meta-item">
+          <div class="meta-label">Humedad</div>
+          <div class="meta-value" id="meta-humidity">--%</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Viento</div>
+          <div class="meta-value" id="meta-wind">-- m/s</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Presión</div>
+          <div class="meta-value" id="meta-pressure">-- hPa</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Precipitación</div>
+          <div class="meta-value" id="meta-rain">-- mm</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Previsión -->
+    <div class="card card-forecast">
+      <div class="card-label">Próximos días</div>
+      <div id="forecast-list" class="forecast-list">
+        <div class="skeleton" style="height:48px"></div>
+        <div class="skeleton" style="height:48px; opacity:0.7"></div>
+        <div class="skeleton" style="height:48px; opacity:0.4"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat con el agente -->
+  <div class="card card-chat">
+    <div class="card-label">Pregunta al agente IA</div>
+    <div class="messages" id="messages">
+      <div class="msg msg-agent">
+        Hola, soy tu asistente meteorologico de Valencia. Puedes preguntarme lo que quieras sobre el tiempo.
+      </div>
+    </div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" placeholder="Necesito paraguas manana?" />
+      <button class="btn-send" id="btn-send" onclick="sendMessage()">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Sugerencias -->
+  <div class="suggestions">
+    <div class="chip" onclick="askSuggestion(this)">Que tiempo hace ahora?</div>
+    <div class="chip" onclick="askSuggestion(this)">Llueve esta semana?</div>
+    <div class="chip" onclick="askSuggestion(this)">Temperatura maxima manana?</div>
+    <div class="chip" onclick="askSuggestion(this)">Prevision 5 dias</div>
+    <div class="chip" onclick="askSuggestion(this)">Hay riesgo de tormenta?</div>
+  </div>
+
+  <footer>
+    Agente Meteorologico Valencia &nbsp;·&nbsp; Datos oficiales AEMET &nbsp;·&nbsp; Powered by OpenAI GPT-4o
+  </footer>
+
+</div>
+
+<script>
+  const API = '';  // misma origin, FastAPI sirve este HTML
+
+  // Cargar datos al arrancar
+  async function loadWeatherData() {
+    try {
+      const [currentRes, forecastRes] = await Promise.all([
+        fetch(`${API}/tiempo/ahora`),
+        fetch(`${API}/tiempo/prevision/5`)
+      ]);
+
+      if (currentRes.ok) {
+        const data = await currentRes.json();
+        const temp = parseFloat(data.temperatura);
+        document.getElementById('temp-display').innerHTML =
+          `${isNaN(temp) ? '--' : Math.round(temp)}<span>°C</span>`;
+        document.getElementById('desc-display').textContent =
+          data.descripcion || data.estado_cielo || 'Valencia';
+        document.getElementById('meta-humidity').textContent = data.humedad || '--%';
+        document.getElementById('meta-wind').textContent = data.viento_velocidad || '-- m/s';
+        document.getElementById('meta-pressure').textContent = data.presion || '-- hPa';
+        document.getElementById('meta-rain').textContent = data.precipitacion || '0 mm';
+      }
+
+      if (forecastRes.ok) {
+        const data = await forecastRes.json();
+        const list = document.getElementById('forecast-list');
+        list.innerHTML = '';
+        const days = ['Dom','Lun','Mar','Mie','Jue','Vie','Sab'];
+        data.prediccion.forEach(dia => {
+          const date = new Date(dia.fecha);
+          const dayName = days[date.getDay()];
+          const dateStr = `${dayName} ${date.getDate()}/${date.getMonth()+1}`;
+          list.innerHTML += `
+            <div class="forecast-day">
+              <div class="forecast-date">${dateStr}</div>
+              <div class="forecast-desc">${dia.estado_cielo}</div>
+              <div class="forecast-temps">
+                <span class="temp-max">${dia.temp_max}</span>
+                <span class="temp-min">${dia.temp_min}</span>
+              </div>
+            </div>`;
+        });
+      }
+    } catch (e) {
+      console.error('Error cargando datos:', e);
+    }
+  }
+
+  // Enviar mensaje al agente
+  async function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const btn   = document.getElementById('btn-send');
+    const msgs  = document.getElementById('messages');
+    const text  = input.value.trim();
+    if (!text) return;
+
+    // Mensaje del usuario
+    msgs.innerHTML += `<div class="msg msg-user">${text}</div>`;
+    input.value = '';
+    btn.disabled = true;
+
+    // Indicador de carga
+    const thinkingId = 'thinking-' + Date.now();
+    msgs.innerHTML += `
+      <div class="msg-thinking" id="${thinkingId}">
+        <div class="dot-pulse">
+          <span></span><span></span><span></span>
+        </div>
+      </div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+
+    try {
+      const res = await fetch(`${API}/consulta`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pregunta: text })
+      });
+      const data = await res.json();
+
+      document.getElementById(thinkingId)?.remove();
+      msgs.innerHTML += `<div class="msg msg-agent">${data.respuesta || data.detail}</div>`;
+    } catch (e) {
+      document.getElementById(thinkingId)?.remove();
+      msgs.innerHTML += `<div class="msg msg-agent" style="color:#ef9a9a">Error conectando con el agente.</div>`;
+    }
+
+    btn.disabled = false;
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  // Chips de sugerencias
+  function askSuggestion(el) {
+    const input = document.getElementById('chat-input');
+    input.value = el.textContent;
+    sendMessage();
+  }
+
+  // Enter para enviar
+  document.getElementById('chat-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendMessage();
+  });
+
+  // Arrancar
+  loadWeatherData();
+</script>
+</body>
+</html>

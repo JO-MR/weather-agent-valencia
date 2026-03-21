@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: weather-agent-valencia
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port     envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AEMET_API_KEY
+        sync: false
