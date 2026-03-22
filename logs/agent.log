@@ -64,3 +64,7 @@
 2026-03-22 15:39:50,494 | INFO | weather-agent | Consultando prevision AEMET — 4 dias
 2026-03-22 15:39:52,521 | INFO | weather-agent | Agente finalizado — tools: ['get_current_weather', 'get_weather_forecast'] | tokens: 1214 | tiempo: 6.2s
 2026-03-22 15:39:52,534 | INFO | weather-agent | RESPONSE [144fc669] POST /consulta 6526ms
+2026-03-22 16:50:40,621 | INFO | weather-agent | LangSmith activado — proyecto: weather-agent-valencia
+2026-03-22 16:50:40,782 | INFO | weather-agent | Langfuse activado — host: https://cloud.langfuse.com
+2026-03-22 16:53:39,810 | INFO | weather-agent | LangSmith activado — proyecto: weather-agent-valencia
+2026-03-22 16:53:39,895 | INFO | weather-agent | Langfuse activado — host: https://cloud.langfuse.com
