@@ -22,7 +22,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from langfuse import Langfuse
-from langfuse.decorators import observe
 from langsmith import traceable
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -271,7 +270,6 @@ SYSTEM_PROMPT = (
 )
 
 
-@observe(name="weather-agent-run")
 @traceable(name="weather-agent-run")
 async def run_agent(user_message: str) -> str:
     """
