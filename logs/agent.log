@@ -68,3 +68,5 @@
 2026-03-22 16:50:40,782 | INFO | weather-agent | Langfuse activado — host: https://cloud.langfuse.com
 2026-03-22 16:53:39,810 | INFO | weather-agent | LangSmith activado — proyecto: weather-agent-valencia
 2026-03-22 16:53:39,895 | INFO | weather-agent | Langfuse activado — host: https://cloud.langfuse.com
+2026-03-22 18:40:11,698 | INFO | weather-agent | LangSmith activado — proyecto: weather-agent-valencia
+2026-03-22 18:40:11,698 | INFO | weather-agent | Langfuse 4.0 activado — host: https://cloud.langfuse.com

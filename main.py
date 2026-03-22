@@ -1,9 +1,8 @@
 """
 Weather AI Agent API - Valencia
 ================================
-API REST con FastAPI, LangSmith y Langfuse para
-trazabilidad, monitorización y control de costes.
-Docker ready.
+API REST con FastAPI, autenticacion por API key,
+rate limiting, LangSmith y Langfuse 4.0.
 """
 
 from __future__ import annotations
@@ -13,20 +12,22 @@ import logging
 import os
 import time
 import uuid
+from collections import defaultdict
 from typing import Any
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
-from langfuse import Langfuse
+from langfuse import get_client
 from langsmith import traceable
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
-load_dotenv()
+load_dotenv(dotenv_path=".env", override=True)
 
 # ---------------------------------------------------------------------------
 # Logging estructurado
@@ -54,6 +55,9 @@ AEMET_ESTACION     = "8414A"
 AEMET_BASE_URL     = "https://opendata.aemet.es/opendata/api"
 MODEL              = "gpt-4o"
 
+# Rate limiting: max peticiones por minuto por API key
+RATE_LIMIT_RPM = int(os.getenv("RATE_LIMIT_RPM", "10"))
+
 _openai_key     = os.getenv("OPENAI_API_KEY")
 _aemet_key      = os.getenv("AEMET_API_KEY")
 _langsmith_key  = os.getenv("LANGCHAIN_API_KEY")
@@ -62,35 +66,93 @@ _langfuse_pub   = os.getenv("LANGFUSE_PUBLIC_KEY")
 _langfuse_sec   = os.getenv("LANGFUSE_SECRET_KEY")
 _langfuse_host  = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
+# API keys validas — separadas por coma en la variable de entorno
+# Ejemplo: API_KEYS=key-abc123,key-def456,key-ghi789
+_raw_api_keys = os.getenv("API_KEYS", "")
+VALID_API_KEYS: set[str] = {
+    k.strip() for k in _raw_api_keys.split(",") if k.strip()
+}
+
 if not _openai_key:
     _openai_key = ""
     logger.warning("OPENAI_API_KEY no configurada")
 if not _aemet_key:
     _aemet_key = ""
     logger.warning("AEMET_API_KEY no configurada")
+if not VALID_API_KEYS:
+    logger.warning("API_KEYS no configurada — autenticacion desactivada")
 
 # Activa LangSmith
 if _langsmith_key:
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
     os.environ["LANGCHAIN_API_KEY"]    = _langsmith_key
     os.environ["LANGCHAIN_PROJECT"]    = _langsmith_proj
+    os.environ["LANGCHAIN_ENDPOINT"]   = "https://eu.api.smith.langchain.com"
     logger.info("LangSmith activado — proyecto: %s", _langsmith_proj)
 else:
     logger.warning("LANGCHAIN_API_KEY no configurada — LangSmith desactivado")
 
-# Inicializa Langfuse
-langfuse: Langfuse | None = None
+# Inicializa Langfuse 4.0
+langfuse_enabled = False
 if _langfuse_pub and _langfuse_sec:
-    langfuse = Langfuse(
-        public_key=_langfuse_pub,
-        secret_key=_langfuse_sec,
-        host=_langfuse_host,
-    )
-    logger.info("Langfuse activado — host: %s", _langfuse_host)
+    os.environ["LANGFUSE_PUBLIC_KEY"] = _langfuse_pub
+    os.environ["LANGFUSE_SECRET_KEY"] = _langfuse_sec
+    os.environ["LANGFUSE_HOST"]       = _langfuse_host
+    langfuse_enabled = True
+    logger.info("Langfuse 4.0 activado — host: %s", _langfuse_host)
 else:
     logger.warning("LANGFUSE keys no configuradas — Langfuse desactivado")
 
 client = AsyncOpenAI(api_key=_openai_key)
+
+# ---------------------------------------------------------------------------
+# Rate limiting en memoria
+# ---------------------------------------------------------------------------
+
+# Almacena {api_key: [(timestamp), ...]}
+_request_log: dict[str, list[float]] = defaultdict(list)
+
+
+def check_rate_limit(api_key: str) -> bool:
+    """Devuelve True si la key ha superado el limite de peticiones por minuto."""
+    now = time.time()
+    window = 60.0
+    timestamps = _request_log[api_key]
+
+    # Elimina timestamps fuera de la ventana
+    _request_log[api_key] = [t for t in timestamps if now - t < window]
+
+    if len(_request_log[api_key]) >= RATE_LIMIT_RPM:
+        return True
+
+    _request_log[api_key].append(now)
+    return False
+
+# ---------------------------------------------------------------------------
+# Autenticacion por API key
+# ---------------------------------------------------------------------------
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def verify_api_key(api_key: str | None = Security(api_key_header)) -> str:
+    """Verifica que la API key sea valida."""
+    if not VALID_API_KEYS:
+        return "anonymous"
+
+    if not api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="API key requerida. Incluye el header X-API-Key en tu peticion.",
+        )
+
+    if api_key not in VALID_API_KEYS:
+        raise HTTPException(
+            status_code=403,
+            detail="API key invalida.",
+        )
+
+    return api_key
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -98,7 +160,11 @@ client = AsyncOpenAI(api_key=_openai_key)
 
 app = FastAPI(
     title="Agente Meteorologico Valencia",
-    description="API REST para consultar el tiempo en Valencia usando AEMET + OpenAI GPT-4o",
+    description=(
+        "API REST para consultar el tiempo en Valencia usando AEMET + OpenAI GPT-4o.\n\n"
+        "**Autenticacion:** incluye el header `X-API-Key` en todas las peticiones.\n\n"
+        "**Rate limit:** 10 peticiones por minuto por API key."
+    ),
     version="1.0.0",
 )
 
@@ -259,7 +325,7 @@ async def execute_tool(tool_name: str, tool_input: dict[str, Any]) -> str:
     return json.dumps(result, ensure_ascii=False)
 
 # ---------------------------------------------------------------------------
-# Bucle del agente con LangSmith + Langfuse
+# Bucle del agente
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = (
@@ -271,114 +337,84 @@ SYSTEM_PROMPT = (
 
 
 @traceable(name="weather-agent-run")
-async def run_agent(user_message: str) -> str:
-    """
-    Bucle agentic con trazabilidad dual:
-    - LangSmith: prompts, tool calls, depuracion
-    - Langfuse:  latencia, tokens, costes, errores
-    """
+async def run_agent(user_message: str, api_key: str = "anonymous") -> str:
     logger.info("Agente iniciado — pregunta: %.80s", user_message)
     start        = time.time()
-    trace_id     = str(uuid.uuid4())
     tools_used:  list[str] = []
     total_tokens = 0
-
-    # Langfuse: inicia traza
-    lf_trace = None
-    if False:  # Langfuse 4.0 temporalmente desactivado
-        lf_trace = langfuse.trace(
-            name="weather-agent-run",
-            id=trace_id,
-            input={"pregunta": user_message},
-            metadata={"model": MODEL, "estacion": AEMET_ESTACION},
-        )
 
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user",   "content": user_message},
     ]
 
+    lf = get_client() if langfuse_enabled else None
+
     try:
-        while True:
-            # Langfuse: registra cada llamada al modelo
-            lf_generation = None
-            if lf_trace:
-                lf_generation = lf_trace.generation(
-                    name="openai-chat",
+        async def _run():
+            nonlocal total_tokens
+            while True:
+                response = await client.chat.completions.create(
                     model=MODEL,
-                    input=messages,
+                    tools=TOOLS,
+                    messages=messages,
                 )
+                choice = response.choices[0]
 
-            response = await client.chat.completions.create(
-                model=MODEL,
-                tools=TOOLS,
-                messages=messages,
-            )
-            choice = response.choices[0]
+                if response.usage:
+                    total_tokens += response.usage.total_tokens
 
-            if lf_generation and response.usage:
-                total_tokens += response.usage.total_tokens
-                lf_generation.end(
-                    output=choice.message.content or "",
-                    usage={
-                        "input":  response.usage.prompt_tokens,
-                        "output": response.usage.completion_tokens,
-                        "total":  response.usage.total_tokens,
+                if choice.finish_reason == "stop":
+                    duration = round(time.time() - start, 2)
+                    logger.info(
+                        "Agente finalizado — tools: %s | tokens: %d | tiempo: %ss",
+                        tools_used, total_tokens, duration,
+                    )
+                    return choice.message.content or ""
+
+                if choice.finish_reason == "tool_calls":
+                    messages.append(choice.message)
+                    for tool_call in choice.message.tool_calls:
+                        tool_name  = tool_call.function.name
+                        tool_input = json.loads(tool_call.function.arguments)
+                        tools_used.append(tool_name)
+                        logger.info("Tool call: %s | input: %s", tool_name, tool_input)
+                        result = await execute_tool(tool_name, tool_input)
+                        messages.append({
+                            "role":         "tool",
+                            "tool_call_id": tool_call.id,
+                            "content":      result,
+                        })
+                else:
+                    break
+
+            return "No se pudo obtener una respuesta del agente."
+
+        if lf:
+            with lf.start_as_current_observation(
+                as_type="span",
+                name="weather-agent-run",
+                input={"pregunta": user_message},
+            ) as span:
+                result = await _run()
+                span.update(
+                    output={"respuesta": result},
+                    metadata={
+                        "tools_used":   tools_used,
+                        "total_tokens": total_tokens,
+                        "api_key":      api_key[:8] + "...",
                     },
                 )
-
-            if choice.finish_reason == "stop":
-                duration = round(time.time() - start, 2)
-                logger.info(
-                    "Agente finalizado — tools: %s | tokens: %d | tiempo: %ss",
-                    tools_used, total_tokens, duration,
-                )
-                if lf_trace:
-                    lf_trace.update(
-                        output={"respuesta": choice.message.content},
-                        metadata={
-                            "tools_used":   tools_used,
-                            "total_tokens": total_tokens,
-                            "duration_s":   duration,
-                        },
-                    )
-                return choice.message.content or ""
-
-            if choice.finish_reason == "tool_calls":
-                messages.append(choice.message)
-                for tool_call in choice.message.tool_calls:
-                    tool_name  = tool_call.function.name
-                    tool_input = json.loads(tool_call.function.arguments)
-                    tools_used.append(tool_name)
-                    logger.info("Tool call: %s | input: %s", tool_name, tool_input)
-
-                    lf_span = None
-                    if lf_trace:
-                        lf_span = lf_trace.span(
-                            name=f"tool-{tool_name}",
-                            input=tool_input,
-                        )
-
-                    result = await execute_tool(tool_name, tool_input)
-
-                    if lf_span:
-                        lf_span.end(output=json.loads(result))
-
-                    messages.append({
-                        "role":         "tool",
-                        "tool_call_id": tool_call.id,
-                        "content":      result,
-                    })
-            else:
-                break
+                return result
+        else:
+            return await _run()
 
     except Exception as e:
         logger.error("Error en el agente: %s", e)
-        if lf_trace:
-            lf_trace.update(output={"error": str(e)}, level="ERROR")
         raise
-
-    return "No se pudo obtener una respuesta del agente."
+    finally:
+        if lf:
+            lf.flush()
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -392,15 +428,23 @@ async def root():
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    """Health check — usado por Docker y Render."""
+    """Health check."""
     return HealthResponse(status="ok", version="1.0.0")
 
 
 @app.post("/consulta", response_model=WeatherResponse)
-async def consulta(request: QuestionRequest):
+async def consulta(
+    request: QuestionRequest,
+    api_key: str = Security(verify_api_key),
+):
     """Consulta meteorologica en lenguaje natural."""
+    if check_rate_limit(api_key):
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit superado. Maximo {RATE_LIMIT_RPM} peticiones por minuto.",
+        )
     try:
-        respuesta = await run_agent(request.pregunta)
+        respuesta = await run_agent(request.pregunta, api_key=api_key)
         return WeatherResponse(respuesta=respuesta, pregunta=request.pregunta)
     except httpx.HTTPError as e:
         logger.error("Error AEMET: %s", e)
@@ -411,8 +455,10 @@ async def consulta(request: QuestionRequest):
 
 
 @app.get("/tiempo/ahora", response_model=dict)
-async def tiempo_ahora():
+async def tiempo_ahora(api_key: str = Security(verify_api_key)):
     """Observacion actual de AEMET."""
+    if check_rate_limit(api_key):
+        raise HTTPException(status_code=429, detail="Rate limit superado.")
     try:
         return await get_current_weather()
     except Exception as e:
@@ -421,8 +467,13 @@ async def tiempo_ahora():
 
 
 @app.get("/tiempo/prevision/{dias}", response_model=dict)
-async def prevision(dias: int = 3):
+async def prevision(
+    dias: int = 3,
+    api_key: str = Security(verify_api_key),
+):
     """Prevision para los proximos N dias (1-7)."""
+    if check_rate_limit(api_key):
+        raise HTTPException(status_code=429, detail="Rate limit superado.")
     try:
         return await get_weather_forecast(days=dias)
     except Exception as e:
