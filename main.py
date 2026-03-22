@@ -285,7 +285,7 @@ async def run_agent(user_message: str) -> str:
 
     # Langfuse: inicia traza
     lf_trace = None
-    if langfuse:
+    if False:  # Langfuse 4.0 temporalmente desactivado
         lf_trace = langfuse.trace(
             name="weather-agent-run",
             id=trace_id,
