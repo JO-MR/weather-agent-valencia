@@ -1,0 +1,66 @@
+2026-03-22 15:25:09,082 | WARNING | weather-agent | LANGCHAIN_API_KEY no configurada — LangSmith desactivado
+2026-03-22 15:25:09,229 | INFO | weather-agent | Langfuse activado — host: https://cloud.langfuse.com
+2026-03-22 15:26:09,486 | INFO | weather-agent | REQUEST  [65623a3e] GET /
+2026-03-22 15:26:09,671 | INFO | weather-agent | RESPONSE [65623a3e] GET / 184ms
+2026-03-22 15:26:09,787 | INFO | weather-agent | REQUEST  [5c65c5bc] GET /tiempo/prevision/5
+2026-03-22 15:26:09,787 | INFO | weather-agent | REQUEST  [91e96ce5] GET /tiempo/ahora
+2026-03-22 15:26:09,787 | INFO | weather-agent | Consultando prevision AEMET — 5 dias
+2026-03-22 15:26:09,787 | INFO | weather-agent | Consultando observacion actual AEMET — estacion 8414A
+2026-03-22 15:26:09,990 | INFO | weather-agent | RESPONSE [91e96ce5] GET /tiempo/ahora 202ms
+2026-03-22 15:26:10,020 | INFO | weather-agent | RESPONSE [5c65c5bc] GET /tiempo/prevision/5 232ms
+2026-03-22 15:31:27,359 | INFO | weather-agent | LangSmith activado — proyecto: weather-agent-valencia
+2026-03-22 15:31:27,458 | INFO | weather-agent | Langfuse activado — host: https://cloud.langfuse.com
+2026-03-22 15:31:43,925 | INFO | weather-agent | LangSmith activado — proyecto: weather-agent-valencia
+2026-03-22 15:31:44,004 | INFO | weather-agent | Langfuse activado — host: https://cloud.langfuse.com
+2026-03-22 15:32:39,380 | INFO | weather-agent | REQUEST  [9a54d0ca] GET /tiempo/ahora
+2026-03-22 15:32:39,381 | INFO | weather-agent | Consultando observacion actual AEMET — estacion 8414A
+2026-03-22 15:32:39,390 | INFO | weather-agent | REQUEST  [44f24362] GET /tiempo/prevision/5
+2026-03-22 15:32:39,391 | INFO | weather-agent | Consultando prevision AEMET — 5 dias
+2026-03-22 15:32:39,591 | INFO | weather-agent | RESPONSE [9a54d0ca] GET /tiempo/ahora 211ms
+2026-03-22 15:32:39,627 | INFO | weather-agent | RESPONSE [44f24362] GET /tiempo/prevision/5 237ms
+2026-03-22 15:32:42,830 | INFO | weather-agent | REQUEST  [0d6200fb] GET /tiempo/ahora
+2026-03-22 15:32:42,830 | INFO | weather-agent | Consultando observacion actual AEMET — estacion 8414A
+2026-03-22 15:32:42,841 | INFO | weather-agent | REQUEST  [8d3e81bc] GET /tiempo/prevision/5
+2026-03-22 15:32:42,844 | INFO | weather-agent | Consultando prevision AEMET — 5 dias
+2026-03-22 15:32:42,984 | INFO | weather-agent | RESPONSE [0d6200fb] GET /tiempo/ahora 154ms
+2026-03-22 15:32:43,039 | INFO | weather-agent | RESPONSE [8d3e81bc] GET /tiempo/prevision/5 198ms
+2026-03-22 15:33:07,968 | INFO | weather-agent | REQUEST  [8e1b75d2] POST /consulta
+2026-03-22 15:33:08,311 | INFO | weather-agent | Agente iniciado — pregunta: Mañana va a llover
+2026-03-22 15:33:08,558 | WARNING | langsmith.client | Failed to multipart ingest runs: langsmith.utils.LangSmithError: Failed to POST https://api.smith.langchain.com/runs/multipart in LangSmith API. HTTPError('403 Client Error: Forbidden for url: https://api.smith.langchain.com/runs/multipart', '{"error":"Forbidden"}\n')
+2026-03-22 15:33:12,120 | INFO | weather-agent | Tool call: get_weather_forecast | input: {'days': 1}
+2026-03-22 15:33:12,120 | INFO | weather-agent | Consultando prevision AEMET — 1 dias
+2026-03-22 15:33:14,370 | INFO | weather-agent | Agente finalizado — tools: ['get_weather_forecast'] | tokens: 552 | tiempo: 6.06s
+2026-03-22 15:33:14,382 | INFO | weather-agent | RESPONSE [8e1b75d2] POST /consulta 6414ms
+2026-03-22 15:33:15,004 | WARNING | langsmith.client | Failed to send compressed multipart ingest: langsmith.utils.LangSmithError: Failed to POST https://api.smith.langchain.com/runs/multipart in LangSmith API. HTTPError('403 Client Error: Forbidden for url: https://api.smith.langchain.com/runs/multipart', '{"error":"Forbidden"}\n')
+2026-03-22 15:36:16,387 | INFO | weather-agent | REQUEST  [f9afce45] POST /consulta
+2026-03-22 15:36:16,402 | INFO | weather-agent | Agente iniciado — pregunta: necito llavar paraguas el lunes
+2026-03-22 15:36:17,067 | WARNING | langsmith.client | Failed to send compressed multipart ingest: langsmith.utils.LangSmithError: Failed to POST https://api.smith.langchain.com/runs/multipart in LangSmith API. HTTPError('403 Client Error: Forbidden for url: https://api.smith.langchain.com/runs/multipart', '{"error":"Forbidden"}\n')
+2026-03-22 15:36:17,912 | INFO | weather-agent | Tool call: get_weather_forecast | input: {'days': 3}
+2026-03-22 15:36:17,914 | INFO | weather-agent | Consultando prevision AEMET — 3 dias
+2026-03-22 15:36:20,001 | INFO | weather-agent | Agente finalizado — tools: ['get_weather_forecast'] | tokens: 688 | tiempo: 3.6s
+2026-03-22 15:36:20,010 | INFO | weather-agent | RESPONSE [f9afce45] POST /consulta 3622ms
+2026-03-22 15:36:20,646 | WARNING | langsmith.client | Failed to send compressed multipart ingest: langsmith.utils.LangSmithError: Failed to POST https://api.smith.langchain.com/runs/multipart in LangSmith API. HTTPError('403 Client Error: Forbidden for url: https://api.smith.langchain.com/runs/multipart', '{"error":"Forbidden"}\n')
+2026-03-22 15:38:33,131 | INFO | weather-agent | LangSmith activado — proyecto: weather-agent-valencia
+2026-03-22 15:38:33,209 | INFO | weather-agent | Langfuse activado — host: https://cloud.langfuse.com
+2026-03-22 15:39:00,162 | INFO | weather-agent | REQUEST  [ba778f4a] GET /tiempo/ahora
+2026-03-22 15:39:00,174 | INFO | weather-agent | Consultando observacion actual AEMET — estacion 8414A
+2026-03-22 15:39:00,177 | INFO | weather-agent | REQUEST  [9bad4ae6] GET /tiempo/prevision/5
+2026-03-22 15:39:00,179 | INFO | weather-agent | Consultando prevision AEMET — 5 dias
+2026-03-22 15:39:00,381 | INFO | weather-agent | RESPONSE [ba778f4a] GET /tiempo/ahora 219ms
+2026-03-22 15:39:00,408 | INFO | weather-agent | RESPONSE [9bad4ae6] GET /tiempo/prevision/5 230ms
+2026-03-22 15:39:08,542 | INFO | weather-agent | REQUEST  [411cfb76] GET /
+2026-03-22 15:39:08,769 | INFO | weather-agent | RESPONSE [411cfb76] GET / 228ms
+2026-03-22 15:39:08,879 | INFO | weather-agent | REQUEST  [4a4de8da] GET /tiempo/ahora
+2026-03-22 15:39:08,879 | INFO | weather-agent | Consultando observacion actual AEMET — estacion 8414A
+2026-03-22 15:39:08,893 | INFO | weather-agent | REQUEST  [21ec911d] GET /tiempo/prevision/5
+2026-03-22 15:39:08,894 | INFO | weather-agent | Consultando prevision AEMET — 5 dias
+2026-03-22 15:39:09,022 | INFO | weather-agent | RESPONSE [4a4de8da] GET /tiempo/ahora 142ms
+2026-03-22 15:39:09,082 | INFO | weather-agent | RESPONSE [21ec911d] GET /tiempo/prevision/5 188ms
+2026-03-22 15:39:46,006 | INFO | weather-agent | REQUEST  [144fc669] POST /consulta
+2026-03-22 15:39:46,326 | INFO | weather-agent | Agente iniciado — pregunta: Que tiempo hará el martes
+2026-03-22 15:39:49,120 | INFO | weather-agent | Tool call: get_current_weather | input: {}
+2026-03-22 15:39:49,120 | INFO | weather-agent | Consultando observacion actual AEMET — estacion 8414A
+2026-03-22 15:39:50,490 | INFO | weather-agent | Tool call: get_weather_forecast | input: {'days': 4}
+2026-03-22 15:39:50,494 | INFO | weather-agent | Consultando prevision AEMET — 4 dias
+2026-03-22 15:39:52,521 | INFO | weather-agent | Agente finalizado — tools: ['get_current_weather', 'get_weather_forecast'] | tokens: 1214 | tiempo: 6.2s
+2026-03-22 15:39:52,534 | INFO | weather-agent | RESPONSE [144fc669] POST /consulta 6526ms

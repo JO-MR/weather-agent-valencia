@@ -1,41 +1,101 @@
 """
 Weather AI Agent API - Valencia
 ================================
-API REST con FastAPI que expone el agente meteorologico
-y sirve la interfaz web desde /static/index.html
+API REST con FastAPI, LangSmith y Langfuse para
+trazabilidad, monitorización y control de costes.
+Docker ready.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
+import uuid
 from typing import Any
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from langfuse import Langfuse
+from langfuse.decorators import observe
+from langsmith import traceable
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 load_dotenv()
+
+# ---------------------------------------------------------------------------
+# Logging estructurado
+# ---------------------------------------------------------------------------
+
+os.makedirs("logs", exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("logs/agent.log", encoding="utf-8"),
+    ],
+)
+
+logger = logging.getLogger("weather-agent")
+
+# ---------------------------------------------------------------------------
+# Configuracion
+# ---------------------------------------------------------------------------
 
 VALENCIA_MUNICIPIO = "46250"
 AEMET_ESTACION     = "8414A"
 AEMET_BASE_URL     = "https://opendata.aemet.es/opendata/api"
 MODEL              = "gpt-4o"
 
-_openai_key = os.getenv("OPENAI_API_KEY")
-_aemet_key  = os.getenv("AEMET_API_KEY")
+_openai_key     = os.getenv("OPENAI_API_KEY")
+_aemet_key      = os.getenv("AEMET_API_KEY")
+_langsmith_key  = os.getenv("LANGCHAIN_API_KEY")
+_langsmith_proj = os.getenv("LANGCHAIN_PROJECT", "weather-agent-valencia")
+_langfuse_pub   = os.getenv("LANGFUSE_PUBLIC_KEY")
+_langfuse_sec   = os.getenv("LANGFUSE_SECRET_KEY")
+_langfuse_host  = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
 if not _openai_key:
-    raise ValueError("Falta OPENAI_API_KEY en las variables de entorno")
+    _openai_key = ""
+    logger.warning("OPENAI_API_KEY no configurada")
 if not _aemet_key:
-    raise ValueError("Falta AEMET_API_KEY en las variables de entorno")
+    _aemet_key = ""
+    logger.warning("AEMET_API_KEY no configurada")
+
+# Activa LangSmith
+if _langsmith_key:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"]    = _langsmith_key
+    os.environ["LANGCHAIN_PROJECT"]    = _langsmith_proj
+    logger.info("LangSmith activado — proyecto: %s", _langsmith_proj)
+else:
+    logger.warning("LANGCHAIN_API_KEY no configurada — LangSmith desactivado")
+
+# Inicializa Langfuse
+langfuse: Langfuse | None = None
+if _langfuse_pub and _langfuse_sec:
+    langfuse = Langfuse(
+        public_key=_langfuse_pub,
+        secret_key=_langfuse_sec,
+        host=_langfuse_host,
+    )
+    logger.info("Langfuse activado — host: %s", _langfuse_host)
+else:
+    logger.warning("LANGFUSE keys no configuradas — Langfuse desactivado")
 
 client = AsyncOpenAI(api_key=_openai_key)
+
+# ---------------------------------------------------------------------------
+# FastAPI app
+# ---------------------------------------------------------------------------
 
 app = FastAPI(
     title="Agente Meteorologico Valencia",
@@ -52,6 +112,23 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# ---------------------------------------------------------------------------
+# Middleware de logging por request
+# ---------------------------------------------------------------------------
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    request_id = str(uuid.uuid4())[:8]
+    start      = time.time()
+    logger.info("REQUEST  [%s] %s %s", request_id, request.method, request.url.path)
+    response   = await call_next(request)
+    duration   = round((time.time() - start) * 1000, 1)
+    logger.info("RESPONSE [%s] %s %s %dms", request_id, request.method, request.url.path, duration)
+    return response
+
+# ---------------------------------------------------------------------------
+# Modelos
+# ---------------------------------------------------------------------------
 
 class QuestionRequest(BaseModel):
     pregunta: str
@@ -76,6 +153,9 @@ class HealthResponse(BaseModel):
     status:  str
     version: str
 
+# ---------------------------------------------------------------------------
+# Herramientas AEMET
+# ---------------------------------------------------------------------------
 
 TOOLS: list[dict[str, Any]] = [
     {
@@ -125,6 +205,7 @@ async def _aemet_fetch(endpoint: str) -> Any:
 
 
 async def get_current_weather() -> dict[str, Any]:
+    logger.info("Consultando observacion actual AEMET — estacion %s", AEMET_ESTACION)
     data = await _aemet_fetch(f"/observacion/convencional/datos/estacion/{AEMET_ESTACION}")
     obs  = data[-1] if isinstance(data, list) else data
     return {
@@ -142,6 +223,7 @@ async def get_current_weather() -> dict[str, Any]:
 
 async def get_weather_forecast(days: int = 3) -> dict[str, Any]:
     days = max(1, min(days, 7))
+    logger.info("Consultando prevision AEMET — %d dias", days)
     data = await _aemet_fetch(f"/prediccion/especifica/municipio/diaria/{VALENCIA_MUNICIPIO}")
     forecast = []
     for dia in data[0]["prediccion"]["dia"][:days]:
@@ -177,6 +259,9 @@ async def execute_tool(tool_name: str, tool_input: dict[str, Any]) -> str:
         result = {"error": f"Herramienta desconocida: {tool_name}"}
     return json.dumps(result, ensure_ascii=False)
 
+# ---------------------------------------------------------------------------
+# Bucle del agente con LangSmith + Langfuse
+# ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = (
     "Eres un asistente meteorologico oficial que usa datos de AEMET para Valencia, Espana. "
@@ -186,38 +271,120 @@ SYSTEM_PROMPT = (
 )
 
 
+@observe(name="weather-agent-run")
+@traceable(name="weather-agent-run")
 async def run_agent(user_message: str) -> str:
+    """
+    Bucle agentic con trazabilidad dual:
+    - LangSmith: prompts, tool calls, depuracion
+    - Langfuse:  latencia, tokens, costes, errores
+    """
+    logger.info("Agente iniciado — pregunta: %.80s", user_message)
+    start        = time.time()
+    trace_id     = str(uuid.uuid4())
+    tools_used:  list[str] = []
+    total_tokens = 0
+
+    # Langfuse: inicia traza
+    lf_trace = None
+    if langfuse:
+        lf_trace = langfuse.trace(
+            name="weather-agent-run",
+            id=trace_id,
+            input={"pregunta": user_message},
+            metadata={"model": MODEL, "estacion": AEMET_ESTACION},
+        )
+
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user",   "content": user_message},
     ]
-    while True:
-        response = await client.chat.completions.create(
-            model=MODEL,
-            tools=TOOLS,
-            messages=messages,
-        )
-        choice = response.choices[0]
 
-        if choice.finish_reason == "stop":
-            return choice.message.content or ""
+    try:
+        while True:
+            # Langfuse: registra cada llamada al modelo
+            lf_generation = None
+            if lf_trace:
+                lf_generation = lf_trace.generation(
+                    name="openai-chat",
+                    model=MODEL,
+                    input=messages,
+                )
 
-        if choice.finish_reason == "tool_calls":
-            messages.append(choice.message)
-            for tool_call in choice.message.tool_calls:
-                tool_name  = tool_call.function.name
-                tool_input = json.loads(tool_call.function.arguments)
-                result     = await execute_tool(tool_name, tool_input)
-                messages.append({
-                    "role":         "tool",
-                    "tool_call_id": tool_call.id,
-                    "content":      result,
-                })
-        else:
-            break
+            response = await client.chat.completions.create(
+                model=MODEL,
+                tools=TOOLS,
+                messages=messages,
+            )
+            choice = response.choices[0]
+
+            if lf_generation and response.usage:
+                total_tokens += response.usage.total_tokens
+                lf_generation.end(
+                    output=choice.message.content or "",
+                    usage={
+                        "input":  response.usage.prompt_tokens,
+                        "output": response.usage.completion_tokens,
+                        "total":  response.usage.total_tokens,
+                    },
+                )
+
+            if choice.finish_reason == "stop":
+                duration = round(time.time() - start, 2)
+                logger.info(
+                    "Agente finalizado — tools: %s | tokens: %d | tiempo: %ss",
+                    tools_used, total_tokens, duration,
+                )
+                if lf_trace:
+                    lf_trace.update(
+                        output={"respuesta": choice.message.content},
+                        metadata={
+                            "tools_used":   tools_used,
+                            "total_tokens": total_tokens,
+                            "duration_s":   duration,
+                        },
+                    )
+                return choice.message.content or ""
+
+            if choice.finish_reason == "tool_calls":
+                messages.append(choice.message)
+                for tool_call in choice.message.tool_calls:
+                    tool_name  = tool_call.function.name
+                    tool_input = json.loads(tool_call.function.arguments)
+                    tools_used.append(tool_name)
+                    logger.info("Tool call: %s | input: %s", tool_name, tool_input)
+
+                    lf_span = None
+                    if lf_trace:
+                        lf_span = lf_trace.span(
+                            name=f"tool-{tool_name}",
+                            input=tool_input,
+                        )
+
+                    result = await execute_tool(tool_name, tool_input)
+
+                    if lf_span:
+                        lf_span.end(output=json.loads(result))
+
+                    messages.append({
+                        "role":         "tool",
+                        "tool_call_id": tool_call.id,
+                        "content":      result,
+                    })
+            else:
+                break
+
+    except Exception as e:
+        logger.error("Error en el agente: %s", e)
+        if lf_trace:
+            lf_trace.update(output={"error": str(e)}, level="ERROR")
+        raise
 
     return "No se pudo obtener una respuesta del agente."
 
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 @app.get("/")
 async def root():
@@ -227,35 +394,39 @@ async def root():
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    """Comprueba que la API esta en funcionamiento."""
+    """Health check — usado por Docker y Render."""
     return HealthResponse(status="ok", version="1.0.0")
 
 
 @app.post("/consulta", response_model=WeatherResponse)
 async def consulta(request: QuestionRequest):
-    """Realiza una consulta meteorologica en lenguaje natural."""
+    """Consulta meteorologica en lenguaje natural."""
     try:
         respuesta = await run_agent(request.pregunta)
         return WeatherResponse(respuesta=respuesta, pregunta=request.pregunta)
     except httpx.HTTPError as e:
+        logger.error("Error AEMET: %s", e)
         raise HTTPException(status_code=503, detail=f"Error conectando con AEMET: {e}")
     except Exception as e:
+        logger.error("Error interno: %s", e)
         raise HTTPException(status_code=500, detail=f"Error interno: {e}")
 
 
 @app.get("/tiempo/ahora", response_model=dict)
 async def tiempo_ahora():
-    """Devuelve la observacion meteorologica actual en Valencia directamente desde AEMET."""
+    """Observacion actual de AEMET."""
     try:
         return await get_current_weather()
     except Exception as e:
+        logger.error("Error observacion AEMET: %s", e)
         raise HTTPException(status_code=503, detail=f"Error obteniendo datos de AEMET: {e}")
 
 
 @app.get("/tiempo/prevision/{dias}", response_model=dict)
 async def prevision(dias: int = 3):
-    """Devuelve la prevision del tiempo para los proximos N dias (1-7)."""
+    """Prevision para los proximos N dias (1-7)."""
     try:
         return await get_weather_forecast(days=dias)
     except Exception as e:
+        logger.error("Error prevision AEMET: %s", e)
         raise HTTPException(status_code=503, detail=f"Error obteniendo prevision de AEMET: {e}")
