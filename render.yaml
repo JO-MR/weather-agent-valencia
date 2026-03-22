@@ -1,10 +1,24 @@
-services:
+﻿services:
   - type: web
     name: weather-agent-valencia
     runtime: python
+    pythonVersion: "3.11"
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port     envVars:
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 
+    envVars:
       - key: OPENAI_API_KEY
         sync: false
       - key: AEMET_API_KEY
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false
+      - key: LANGFUSE_HOST
+        sync: false
+      - key: LANGCHAIN_API_KEY
+        sync: false
+      - key: LANGCHAIN_PROJECT
+        sync: false
+      - key: LANGCHAIN_TRACING_V2
         sync: false
